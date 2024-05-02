@@ -4,11 +4,7 @@ const DepartmentController = require("../../controllers/department.controller");
 const asyncHandler = require("../../helpers/asyncHandler");
 const router = express.Router();
 
-// Tìm người dùng bằng email
-router.get(
-  "/findByEmail/:email",
-  asyncHandler(DepartmentController.findByEmail)
-);
+
 // Lấy ra hết tất cả user
 router.get("/getAll", asyncHandler(DepartmentController.getAll));
 
