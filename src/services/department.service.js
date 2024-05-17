@@ -9,13 +9,15 @@ const {
 const { ObjectId } = require("mongodb");
 class DepartmentService {
   static select = {
+    department_id: true,
     name: true,
     description: true,
     createdBy: true,
     createdAt: true,
+    manager_id: true,
   };
   // create new department
-  static create = async ({ name, description, createdBy }) => {
+  static create = async ({ name, description }, createdBy) => {
     const department = await prisma.department.create({
       data: { name, description, createdBy },
       select: this.select,
@@ -26,9 +28,7 @@ class DepartmentService {
       metadata: null,
     };
   };
-
   // get all department instances
-
   static getAll = async ({
     items_per_page,
     page,
@@ -36,9 +36,13 @@ class DepartmentService {
     nextPage,
     previousPage,
   }) => {
-    console.log(items_per_page);
+    const query = [
+      {
+        deletedMark: false,
+      },
+    ];
     return await this.queryDepartment({
-      condition: false,
+      query: query,
       items_per_page,
       page,
       search,
@@ -54,8 +58,13 @@ class DepartmentService {
     nextPage,
     previousPage,
   }) => {
+    const query = [
+      {
+        deletedMark: true,
+      },
+    ];
     return await this.queryDepartment({
-      condition: true,
+      query: query,
       items_per_page,
       page,
       search,
@@ -70,15 +79,31 @@ class DepartmentService {
       select: this.select,
     });
   };
-  // Cập nhật phòng ban
-  static update = async ({ id, data }) => {
+  // update department for manager
+  static updateForManager = async ({ id, data, userId }) => {
+    const department = await prisma.department.findUnique({
+      where: { department_id: id },
+    });
+    if (department.manager_id !== userId)
+      throw new BadRequestError("Bạn không có quyền cập nhật cho phòng ban");
+    if (data.manager_id)
+      throw new BadRequestError(
+        "Bạn không có quyền chỉ định quản lý cho phòng ban"
+      );
     return await prisma.department.update({
       where: { department_id: id },
-      data,
+      data: { ...data, modifiedBy: userId },
       select: this.select,
     });
   };
-  // Xoá phòng ban
+  static update = async ({ id, data, userId }) => {
+    return await prisma.department.update({
+      where: { department_id: id },
+      data: { ...data, modifiedBy: userId },
+      select: this.select,
+    });
+  };
+  // delete department
   static delete = async (department_id) => {
     return await prisma.department.update({
       where: { department_id },
@@ -89,7 +114,7 @@ class DepartmentService {
       select: this.select,
     });
   };
-  // Khôi phục lại phòng ban
+  // restore department
   static restore = async (department_id) => {
     return await prisma.department.update({
       where: { department_id },
@@ -99,65 +124,51 @@ class DepartmentService {
       select: this.select,
     });
   };
+
   static queryDepartment = async ({
-    condition,
+    query,
     items_per_page,
     page,
     search,
     nextPage,
     previousPage,
   }) => {
-    console.log(items_per_page);
-    const itemsPerPage = Number(items_per_page) || 10;
-    const currentPage = Number(page) || 1;
     const searchKeyword = search || "";
+    let itemsPerPage = 10;
+    let whereClause = {
+      OR: [
+        {
+          name: {
+            contains: searchKeyword,
+          },
+        },
+        {
+          description: {
+            contains: searchKeyword,
+          },
+        },
+      ],
+    };
+    if (query && query.length > 0) {
+      whereClause.AND = query;
+    }
+    const total = await prisma.department.count({
+      where: whereClause,
+    });
+    if (items_per_page !== "ALL") {
+      itemsPerPage = Number(items_per_page) || 10;
+    } else {
+      itemsPerPage = total;
+    }
+    const currentPage = Number(page) || 1;
     const skip = currentPage > 1 ? (currentPage - 1) * itemsPerPage : 0;
     const departments = await prisma.department.findMany({
       take: itemsPerPage,
       skip,
       select: this.select,
-      where: {
-        OR: [
-          {
-            name: {
-              contains: searchKeyword,
-            },
-          },
-          {
-            description: {
-              contains: searchKeyword,
-            },
-          },
-        ],
-        AND: [
-          {
-            deletedMark: condition,
-          },
-        ],
-      },
+      where: whereClause,
       orderBy: {
         createdAt: "desc",
-      },
-    });
-    const total = await prisma.department.count({
-      where: {
-        OR: [
-          {
-            name: {
-              contains: searchKeyword,
-            },
-          },
-          {
-            description: {
-              contains: searchKeyword,
-            },
-          },
-        ],
-        AND: [
-          {
-            deletedMark: condition,
-          },
-        ],
       },
     });
     const lastPage = Math.ceil(total / itemsPerPage);

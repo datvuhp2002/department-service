@@ -6,7 +6,7 @@ class DepartmentController {
   create = async (req, res, next) => {
     new CREATED({
       message: "Tạo phòng ban mới thành công",
-      data: await DepartmentService.create(req.body),
+      data: await DepartmentService.create(req.body, req.headers.user),
     }).send(res);
   };
   /**
@@ -22,6 +22,7 @@ class DepartmentController {
       data: await DepartmentService.getAll(req.query),
     }).send(res);
   };
+
   /**
    * @param {items_per_page}
    * @param {page}
@@ -47,6 +48,17 @@ class DepartmentController {
       data: await DepartmentService.update({
         id: req.params.id,
         data: req.body,
+        userId: req.headers.user,
+      }),
+    }).send(res);
+  };
+  updateForManager = async (req, res, next) => {
+    new SuccessResponse({
+      message: "Cập nhật phòng ban thành công",
+      data: await DepartmentService.updateForManager({
+        id: req.params.id,
+        data: req.body,
+        userId: req.headers.user,
       }),
     }).send(res);
   };
